@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon RPG Quotidien - Synchronisé</title>
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: #e6e6e6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .widget-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Barre de synchronisation */
+        .sync-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .sync-online {
+            color: #00ff88;
+        }
+        
+        .sync-offline {
+            color: #ff5555;
+        }
+        
+        .sync-loading {
+            color: #ffd700;
+        }
+        
+        /* Login screen */
+        .login-screen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .login-box {
+            background: rgba(30, 30, 60, 0.95);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            border: 2px solid #00d9ff;
+        }
+        
+        .login-title {
+            color: #00d9ff;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+        }
+        
+        .login-input {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border: 2px solid #00a8ff;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            font-size: 1rem;
+        }
+        
+        /* Le reste du CSS reste identique à la version précédente */
+        .rpg-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+        }
+        
+        .player-stats {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-box {
+            background: rgba(30, 30, 60, 0.8);
+            border-radius: 10px;
+            padding: 10px 15px;
+            border: 1px solid rgba(100, 100, 200, 0.5);
+            min-width: 120px;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: #a0a0c0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #00d9ff;
+            text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+        }
+        
+        .level-display {
+            text-align: center;
+        }
+        
+        .level-title {
+            font-size: 1rem;
+            color: #ffd700;
+            margin-bottom: 5px;
+        }
+        
+        .level-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #ffd700;
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
+        }
+        
+        .xp-bar-container, .hp-bar-container {
+            margin-top: 5px;
+        }
+        
+        .bar-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            margin-bottom: 3px;
+        }
+        
+        .bar {
+            height: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        .xp-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88, #00d9ff);
+            border-radius: 5px;
+            transition: width 0.5s;
+        }
+        
+        .hp-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #ff416c, #ff4b2b);
+            border-radius: 5px;
+            transition: width 0.5s;
+        }
+        
+        .boss-section {
+            background: rgba(139, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 25px 0;
+            border: 2px solid rgba(255, 0, 0, 0.3);
+            position: relative;
+        }
+        
+        .boss-title {
+            color: #ff5555;
+            font-size: 1.4rem;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .boss-icon {
+            font-size: 1.8rem;
+        }
+        
+        .boss-name {
+            font-size: 1.8rem;
+            color: #ffd700;
+            margin-bottom: 10px;
+        }
+        
+        .boss-description {
+            color: #ffaaaa;
+            font-style: italic;
+            margin-bottom: 15px;
+        }
+        
+        .boss-hp {
+            margin-top: 15px;
+        }
+        
+        .boss-hp-bar {
+            height: 20px;
+            background: rgba(255, 0, 0, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        
+        .boss-hp-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff0000, #ff5555);
+            border-radius: 10px;
+            transition: width 0.5s;
+        }
+        
+        .energy-mode {
+            background: rgba(0, 100, 255, 0.2);
+            border-radius: 15px;
+            padding: 15px;
+            margin: 20px 0;
+            border-left: 4px solid #00a8ff;
+        }
+        
+        .mode-title {
+            color: #00a8ff;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .mode-options {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .mode-btn {
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid;
+            background: transparent;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .mode-btn.active {
+            transform: scale(1.05);
+            box-shadow: 0 0 10px currentColor;
+        }
+        
+        .mode-fatigue {
+            border-color: #ff9966;
+            color: #ff9966;
+        }
+        
+        .mode-normal {
+            border-color: #00d9ff;
+            color: #00d9ff;
+        }
+        
+        .mode-motivated {
+            border-color: #00ff88;
+            color: #00ff88;
+        }
+        
+        .mode-late {
+            border-color: #ff5555;
+            color: #ff5555;
+        }
+        
+        .daily-tasks {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        
+        .section-title {
+            color: #00d9ff;
+            margin-bottom: 15px;
+            font-size: 1.4rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .task-list {
+            list-style: none;
+        }
+        
+        .task-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border-left: 4px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .task-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+        
+        .task-item.essential {
+            border-left-color: #ff9966;
+        }
+        
+        .task-item.bonus {
+            border-left-color: #00ff88;
+        }
+        
+        .task-checkbox {
+            width: 24px;
+            height: 24px;
+            margin-right: 15px;
+            cursor: pointer;
+            accent-color: #00d9ff;
+        }
+        
+        .task-content {
+            flex: 1;
+        }
+        
+        .task-title {
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+        
+        .task-xp {
+            color: #ffd700;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+        
+        .task-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 5px;
+        }
+        
+        .task-time {
+            color: #a0a0c0;
+            font-size: 0.9rem;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 1rem;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(90deg, #00a8ff, #00d9ff);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e6e6e6;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(90deg, #ff416c, #ff4b2b);
+            color: white;
+        }
+        
+        .btn-success {
+            background: linear-gradient(90deg, #00b09b, #96c93d);
+            color: white;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 217, 255, 0.4);
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            z-index: 1000;
+            animation: slideIn 0.5s, fadeOut 0.5s 2.5s;
+            display: none;
+            max-width: 300px;
+        }
+        
+        .notification.death {
+            background: linear-gradient(135deg, #8B0000, #B22222);
+            border-left: 5px solid #FFD700;
+        }
+        
+        .notification.victory {
+            background: linear-gradient(135deg, #006400, #228B22);
+            border-left: 5px solid #FFD700;
+        }
+        
+        .notification.level-up {
+            background: linear-gradient(135deg, #4B0082, #9400D3);
+            border-left: 5px solid #FFD700;
+        }
+        
+        .campfire {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            cursor: pointer;
+            font-size: 2rem;
+            animation: flicker 2s infinite alternate;
+        }
+        
+        .streak-info {
+            background: rgba(255, 215, 0, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: center;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+        }
+        
+        .streak-count {
+            font-size: 2rem;
+            color: #ffd700;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+        
+        .days-off {
+            margin-top: 10px;
+            color: #ff9966;
+            font-size: 0.9rem;
+        }
+        
+        @keyframes flicker {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        
+        .rewards-section {
+            background: rgba(255, 215, 0, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px dashed rgba(255, 215, 0, 0.5);
+        }
+        
+        .reward-option {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 8px;
+            margin: 5px 0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .reward-option:hover {
+            background: rgba(255, 215, 0, 0.2);
+            transform: translateX(5px);
+        }
+        
+        @media (max-width: 768px) {
+            .player-stats {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .stat-box {
+                min-width: 100%;
+            }
+            
+            .mode-options {
+                flex-direction: column;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Écran de connexion -->
+    <div class="login-screen" id="loginScreen">
+        <div class="login-box">
+            <div class="login-title">🎮 Mon RPG Quotidien</div>
+            <p style="margin-bottom: 20px; color: #a0a0c0;">Connectez-vous pour synchroniser entre vos appareils</p>
+            
+            <div style="margin: 20px 0;">
+                <button class="btn btn-primary" onclick="loginWithGoogle()" style="width: 100%; margin-bottom: 10px;">
+                    🔗 Se connecter avec Google
+                </button>
+                
+                <div style="color: #ff9966; margin: 10px 0;">OU</div>
+                
+                <input type="text" id="username" class="login-input" placeholder="Choisissez un pseudo">
+                <button class="btn btn-secondary" onclick="loginAsGuest()" style="width: 100%;">
+                    🎭 Continuer sans compte
+                </button>
+            </div>
+            
+            <p style="color: #a0a0c0; font-size: 0.9rem; margin-top: 20px;">
+                Avec un compte : Synchronisation automatique<br>
+                Sans compte : Données locales seulement
+            </p>
+        </div>
+    </div>
+
+    <!-- Statut de synchronisation -->
+    <div class="sync-status" id="syncStatus">
+        <span id="syncIcon">🔄</span>
+        <span id="syncText">Connexion...</span>
+    </div>
+
+    <!-- Widget principal -->
+    <div class="widget-container" id="mainWidget" style="display: none;">
+        <!-- Feu de camp -->
+        <div class="campfire" onclick="restAtCampfire()" title="Reposez-vous au feu de camp">
+            🔥
+        </div>
+        
+        <!-- En-tête RPG -->
+        <div class="rpg-header">
+            <div class="player-stats">
+                <div class="stat-box">
+                    <div class="stat-label">Niveau</div>
+                    <div class="level-display">
+                        <div class="level-title" id="rankTitle">Débutant</div>
+                        <div class="level-number" id="playerLevel">1</div>
+                    </div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-label">Expérience</div>
+                    <div class="stat-value" id="xpValue">0</div>
+                    <div class="xp-bar-container">
+                        <div class="bar-label">
+                            <span>XP</span>
+                            <span id="xpProgress">0/100</span>
+                        </div>
+                        <div class="bar">
+                            <div class="xp-bar" id="xpBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-label">Points de Vie</div>
+                    <div class="stat-value" id="hpValue">100</div>
+                    <div class="hp-bar-container">
+                        <div class="bar-label">
+                            <span>PV</span>
+                            <span id="hpPercent">100%</span>
+                        </div>
+                        <div class="bar">
+                            <div class="hp-bar" id="hpBar" style="width: 100%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stat-box">
+                    <div class="stat-label">Jours Consécutifs</div>
+                    <div class="streak-count" id="streakCount">0</div>
+                    <div class="days-off" id="daysOff">Jours off: 0/2</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mode énergie -->
+        <div class="energy-mode">
+            <div class="mode-title">⚡ Mode Énergie du Jour</div>
+            <div class="mode-options">
+                <button class="mode-btn mode-fatigue" onclick="setEnergyMode('fatigue')">Fatigué</button>
+                <button class="mode-btn mode-normal active" onclick="setEnergyMode('normal')">Normal</button>
+                <button class="mode-btn mode-motivated" onclick="setEnergyMode('motivated')">Motivé</button>
+                <button class="mode-btn mode-late" onclick="setEnergyMode('late')">En retard</button>
+            </div>
+            <div id="modeDescription" style="margin-top: 10px; color: #a0a0c0; font-size: 0.9rem;">
+                Mode normal : Complétez toutes les tâches essentielles
+            </div>
+        </div>
+        
+        <!-- BOSS du jour -->
+        <div class="boss-section">
+            <div class="boss-title">
+                <span class="boss-icon">⚔️</span>
+                BOSS DU JOUR
+            </div>
+            <div class="boss-name" id="bossName">"PROCRASTINATION"</div>
+            <div class="boss-description" id="bossDescription">
+                Ce boss attaque votre volonté et vous distrait avec des divertissements
+            </div>
+            <div class="boss-hp">
+                <div class="bar-label">
+                    <span>Points de BOSS</span>
+                    <span id="bossHpText">100/100</span>
+                </div>
+                <div class="boss-hp-bar">
+                    <div class="boss-hp-fill" id="bossHpBar" style="width: 100%"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tâches du jour -->
+        <div class="daily-tasks">
+            <div class="section-title">📜 Quêtes du Jour</div>
+            <ul class="task-list" id="taskList">
+                <!-- Généré par JavaScript -->
+            </ul>
+        </div>
+        
+        <!-- Récompenses -->
+        <div class="rewards-section" id="rewardsSection" style="display: none;">
+            <div class="section-title">🎁 Choisissez votre récompense</div>
+            <div id="rewardsList"></div>
+        </div>
+        
+        <!-- Contrôles -->
+        <div class="controls">
+            <button class="btn btn-secondary" onclick="takeDayOff()">Jour OFF</button>
+            <button class="btn btn-danger" onclick="failDay()">YOU DIED</button>
+            <button class="btn btn-success" onclick="completeDay()">Victoire du Jour</button>
+            <button class="btn btn-primary" onclick="forceSync()">🔄 Synchroniser</button>
+        </div>
+    </div>
+    
+    <!-- Notification -->
+    <div class="notification" id="notification"></div>
+
+    <script>
+        // =========== CONFIGURATION FIREBASE ===========
+        // 🚨 REMPLACEZ CES VALEURS PAR VOS PROPRES CLÉS FIREBASE 🚨
+        const firebaseConfig = {
+            apiKey: "AIzaSyDummyKeyReplaceThisWithYours",
+            authDomain: "votre-projet.firebaseapp.com",
+            projectId: "votre-projet",
+            storageBucket: "votre-projet.appspot.com",
+            messagingSenderId: "1234567890",
+            appId: "1:1234567890:web:abcdef1234567890"
+        };
+
+        // Initialisation Firebase
+        let db;
+        let userId = null;
+        let isOnline = false;
+        let syncInterval;
+
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            console.log("Firebase initialisé");
+        } catch (error) {
+            console.log("Mode hors ligne - Firebase non disponible");
+        }
+
+        // =========== DONNÉES DU JEU ===========
+        const gameData = {
+            level: 1,
+            xp: 0,
+            xpToNextLevel: 100,
+            hp: 100,
+            maxHp: 100,
+            streak: 0,
+            daysOffThisWeek: 0,
+            maxDaysOffPerWeek: 2,
+            
+            boss: {
+                name: "PROCRASTINATION",
+                description: "Ce boss attaque votre volonté et vous distrait avec des divertissements",
+                currentHp: 100,
+                maxHp: 100,
+                defeated: false
+            },
+            
+            energyMode: "normal",
+            username: "Aventurier",
+            deviceId: generateDeviceId(),
+            
+            dailyTasks: [
+                { id: 1, text: "Duolingo anglais (15min)", time: "Trajet", xp: 25, essential: true, completed: false },
+                { id: 2, text: "Préparer repas du midi", time: "Matin", xp: 15, essential: true, completed: false },
+                { id: 3, text: "Gainage/abdos (10min)", time: "Soir", xp: 30, essential: true, completed: false },
+                { id: 4, text: "Révision code route (20min)", time: "Mardi/Jeudi", xp: 40, essential: false, completed: false },
+                { id: 5, text: "Exercice éloquence (10min)", time: "Mercredi", xp: 35, essential: false, completed: false },
+                { id: 6, text: "Badminton", time: getBadmintonDay(), xp: 50, essential: false, isBadminton: true, completed: false }
+            ],
+            
+            rewards: [
+                "Regarder un épisode d'anime",
+                "30min de jeu vidéo",
+                "Acheter une petite gourmandise",
+                "Temps libre supplémentaire",
+                "Nouveau webtoon à lire"
+            ],
+            
+            lastSync: null,
+            version: "2.0"
+        };
+
+        // =========== INITIALISATION ===========
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Vérifier si l'utilisateur est déjà connecté
+            const savedUserId = localStorage.getItem('rpgUserId');
+            const savedUsername = localStorage.getItem('rpgUsername');
+            
+            if (savedUserId && savedUsername) {
+                // Connecté automatiquement
+                userId = savedUserId;
+                gameData.username = savedUsername;
+                await initializeGame();
+            } else {
+                // Montrer l'écran de connexion
+                showLoginScreen();
+            }
+            
+            // Écouter les changements de connexion
+            window.addEventListener('online', handleOnlineStatus);
+            window.addEventListener('offline', handleOnlineStatus);
+            handleOnlineStatus();
+            
+            // Auto-sauvegarde toutes les minutes
+            setInterval(autoSave, 60000);
+        });
+
+        // =========== GESTION DE LA CONNEXION ===========
+        function showLoginScreen() {
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('mainWidget').style.display = 'none';
+        }
+
+        function hideLoginScreen() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainWidget').style.display = 'block';
+        }
+
+        function loginWithGoogle() {
+            // Pour une vraie implémentation, utilisez Firebase Auth
+            // Version simplifiée :
+            const username = document.getElementById('username').value || "Aventurier Google";
+            gameData.username = username;
+            userId = "google_" + Math.random().toString(36).substr(2, 9);
+            
+            localStorage.setItem('rpgUserId', userId);
+            localStorage.setItem('rpgUsername', username);
+            
+            showNotification(`👋 Bienvenue ${username}!`, 'victory');
+            hideLoginScreen();
+            initializeGame();
+        }
+
+        function loginAsGuest() {
+            const username = document.getElementById('username').value || "Aventurier";
+            gameData.username = username;
+            userId = "guest_" + gameData.deviceId;
+            
+            localStorage.setItem('rpgUserId', userId);
+            localStorage.setItem('rpgUsername', username);
+            
+            showNotification(`🎭 Mode invité - ${username}`, 'level-up');
+            hideLoginScreen();
+            initializeGame();
+        }
+
+        // =========== SYNC CLOUD ===========
+        async function initializeGame() {
+            // 1. Charger depuis le localStorage
+            loadFromLocalStorage();
+            
+            // 2. Essayer de synchroniser avec le cloud
+            await syncWithCloud();
+            
+            // 3. Mettre à jour l'UI
+            updateStats();
+            generateTasks();
+            updateBossDisplay();
+            updateStreakDisplay();
+            
+            // 4. Démarrer la synchro automatique
+            startAutoSync();
+        }
+
+        async function syncWithCloud() {
+            if (!db || !userId) return;
+            
+            updateSyncStatus('🔄 Synchronisation...', 'sync-loading');
+            
+            try {
+                // Vérifier la connexion
+                const isConnected = await checkConnection();
+                if (!isConnected) {
+                    updateSyncStatus('🌐 Hors ligne', 'sync-offline');
+                    return;
+                }
+                
+                // Charger depuis Firestore
+                const docRef = db.collection('users').doc(userId);
+                const doc = await docRef.get();
+                
+                if (doc.exists) {
+                    const cloudData = doc.data();
+                    
+                    // Fusionner intelligemment les données
+                    mergeGameData(cloudData);
+                    
+                    // Sauvegarder localement
+                    saveToLocalStorage();
+                    
+                    updateSyncStatus('✅ Synchronisé', 'sync-online');
+                    showNotification('📡 Données synchronisées!', 'victory');
+                    isOnline = true;
+                } else {
+                    // Premier enregistrement dans le cloud
+                    await saveToCloud();
+                    updateSyncStatus('☁️ Premier enregistrement', 'sync-online');
+                    isOnline = true;
+                }
+                
+            } catch (error) {
+                console.error("Erreur de synchronisation:", error);
+                updateSyncStatus('❌ Erreur de sync', 'sync-offline');
+                isOnline = false;
+            }
+        }
+
+        async function saveToCloud() {
+            if (!db || !userId || !isOnline) return;
+            
+            try {
+                gameData.lastSync = new Date().toISOString();
+                gameData.deviceId = gameData.deviceId; // Garder l'ID d'origine
+                
+                await db.collection('users').doc(userId).set(gameData);
+                console.log("Données sauvegardées dans le cloud");
+                return true;
+            } catch (error) {
+                console.error("Erreur sauvegarde cloud:", error);
+                return false;
+            }
+        }
+
+        function mergeGameData(cloudData) {
+            // Règles de fusion :
+            // 1. Garder le niveau le plus élevé
+            // 2. Garder l'XP la plus élevée
+            // 3. Garder le streak le plus long
+            // 4. Fusionner les tâches complétées
+            
+            if (cloudData.level > gameData.level) {
+                gameData.level = cloudData.level;
+                gameData.xp = cloudData.xp;
+                gameData.xpToNextLevel = cloudData.xpToNextLevel;
+            }
+            
+            if (cloudData.streak > gameData.streak) {
+                gameData.streak = cloudData.streak;
+            }
+            
+            // Fusionner les tâches
+            if (cloudData.dailyTasks) {
+                cloudData.dailyTasks.forEach(cloudTask => {
+                    const localTask = gameData.dailyTasks.find(t => t.id === cloudTask.id);
+                    if (localTask && cloudTask.completed) {
+                        localTask.completed = true;
+                    }
+                });
+            }
+            
+            // Mettre à jour la date
+            gameData.lastSync = cloudData.lastSync;
+        }
+
+        function forceSync() {
+            showNotification('🔄 Synchronisation forcée...', 'level-up');
+            syncWithCloud();
+        }
+
+        function startAutoSync() {
+            if (syncInterval) clearInterval(syncInterval);
+            
+            syncInterval = setInterval(async () => {
+                if (isOnline) {
+                    await saveToCloud();
+                }
+            }, 30000); // Toutes les 30 secondes
+        }
+
+        // =========== GESTION HORS LIGNE ===========
+        function loadFromLocalStorage() {
+            const saved = localStorage.getItem('rpgGameData');
+            if (saved) {
+                try {
+                    const loaded = JSON.parse(saved);
+                    
+                    // Ne pas écraser les données si la version est plus ancienne
+                    if (loaded.version === gameData.version) {
+                        Object.assign(gameData, loaded);
+                    }
+                } catch (error) {
+                    console.error("Erreur chargement local:", error);
+                }
+            }
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('rpgGameData', JSON.stringify(gameData));
+        }
+
+        function autoSave() {
+            saveToLocalStorage();
+            if (isOnline) {
+                saveToCloud();
+            }
+        }
+
+        // =========== FONCTIONS UTILITAIRES ===========
+        function updateSyncStatus(text, className) {
+            const statusEl = document.getElementById('syncStatus');
+            const iconEl = document.getElementById('syncIcon');
+            const textEl = document.getElementById('syncText');
+            
+            statusEl.className = `sync-status ${className}`;
+            textEl.textContent = text;
+        }
+
+        function handleOnlineStatus() {
+            if (navigator.onLine) {
+                updateSyncStatus('🌐 En ligne', 'sync-online');
+                isOnline = true;
+                // Tenter une sync quand on revient en ligne
+                if (userId) syncWithCloud();
+            } else {
+                updateSyncStatus('📴 Hors ligne', 'sync-offline');
+                isOnline = false;
+            }
+        }
+
+        async function checkConnection() {
+            try {
+                await fetch('https://www.google.com', { mode: 'no-cors' });
+                return true;
+            } catch {
+                return false;
+            }
+        }
+
+        function generateDeviceId() {
+            let id = localStorage.getItem('deviceId');
+            if (!id) {
+                id = 'device_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('deviceId', id);
+            }
+            return id;
+        }
+
+        // =========== FONCTIONS DU JEU (inchangées) ===========
+        function updateStats() {
+            document.getElementById('playerLevel').textContent = gameData.level;
+            document.getElementById('xpValue').textContent = gameData.xp;
+            
+            const xpPercent = (gameData.xp / gameData.xpToNextLevel * 100).toFixed(1);
+            document.getElementById('xpBar').style.width = `${xpPercent}%`;
+            document.getElementById('xpProgress').textContent = `${gameData.xp}/${gameData.xpToNextLevel}`;
+            
+            document.getElementById('hpValue').textContent = gameData.hp;
+            const hpPercent = (gameData.hp / gameData.maxHp * 100).toFixed(0);
+            document.getElementById('hpBar').style.width = `${hpPercent}%`;
+            document.getElementById('hpPercent').textContent = `${hpPercent}%`;
+            
+            document.getElementById('rankTitle').textContent = getRankTitle(gameData.level);
+        }
+
+        function getRankTitle(level) {
+            if (level >= 25) return "LÉGENDE";
+            if (level >= 20) return "CHAMPION";
+            if (level >= 15) return "HÉROS";
+            if (level >= 10) return "AVENTURIER";
+            if (level >= 5) return "APPRENTI";
+            return "DÉBUTANT";
+        }
+
+        function generateTasks() {
+            const taskList = document.getElementById('taskList');
+            taskList.innerHTML = '';
+            
+            let tasksToShow = [];
+            switch(gameData.energyMode) {
+                case 'fatigue': tasksToShow = gameData.dailyTasks.filter(t => t.essential); break;
+                case 'late': tasksToShow = [gameData.dailyTasks[1], gameData.dailyTasks[0]]; break;
+                case 'motivated': 
+                    tasksToShow = [...gameData.dailyTasks];
+                    tasksToShow.push({
+                        id: 99, text: "DÉFI BONUS: 5min méditation", time: "Quand vous voulez",
+                        xp: 50, essential: false, isBonus: true, completed: false
+                    });
+                    break;
+                default: tasksToShow = gameData.dailyTasks;
+            }
+            
+            tasksToShow.forEach(task => {
+                const li = document.createElement('li');
+                li.className = `task-item ${task.essential ? 'essential' : ''} ${task.isBonus ? 'bonus' : ''}`;
+                li.innerHTML = `
+                    <input type="checkbox" class="task-checkbox" data-id="${task.id}" ${task.completed ? 'checked' : ''}>
+                    <div class="task-content">
+                        <div class="task-title">${task.text}</div>
+                        <div class="task-info">
+                            <div class="task-xp">+${task.xp} XP</div>
+                            <div class="task-time">${task.time}</div>
+                        </div>
+                    </div>
+                `;
+                taskList.appendChild(li);
+                
+                li.querySelector('.task-checkbox').addEventListener('change', function() {
+                    const taskObj = tasksToShow.find(t => t.id === parseInt(this.dataset.id)) || 
+                                  gameData.dailyTasks.find(t => t.id === parseInt(this.dataset.id));
+                    if (taskObj) {
+                        taskObj.completed = this.checked;
+                        if (this.checked) {
+                            addXP(taskObj.xp);
+                            damageBoss(10);
+                        } else {
+                            addXP(-taskObj.xp);
+                            healBoss(10);
+                        }
+                        autoSave();
+                        checkBossDefeat();
+                    }
+                });
+            });
+        }
+
+        function addXP(amount) {
+            gameData.xp += amount;
+            while (gameData.xp >= gameData.xpToNextLevel) {
+                gameData.xp -= gameData.xpToNextLevel;
+                gameData.level++;
+                gameData.xpToNextLevel = Math.floor(gameData.xpToNextLevel * 1.2);
+                gameData.hp = gameData.maxHp;
+                showNotification(`🎉 NIVEAU ${gameData.level} ATTEINT!`, 'level-up');
+            }
+            updateStats();
+        }
+
+        function damageBoss(amount) {
+            gameData.boss.currentHp -= amount;
+            if (gameData.boss.currentHp < 0) gameData.boss.currentHp = 0;
+            updateBossDisplay();
+        }
+
+        function healBoss(amount) {
+            gameData.boss.currentHp += amount;
+            if (gameData.boss.currentHp > gameData.boss.maxHp) gameData.boss.currentHp = gameData.boss.maxHp;
+            updateBossDisplay();
+        }
+
+        function updateBossDisplay() {
+            document.getElementById('bossName').textContent = `"${gameData.boss.name}"`;
+            document.getElementById('bossDescription').textContent = gameData.boss.description;
+            
+            const bossHpPercent = (gameData.boss.currentHp / gameData.boss.maxHp * 100).toFixed(0);
+            document.getElementById('bossHpBar').style.width = `${bossHpPercent}%`;
+            document.getElementById('bossHpText').textContent = `${gameData.boss.currentHp}/${gameData.boss.maxHp}`;
+        }
+
+        function checkBossDefeat() {
+            if (gameData.boss.currentHp <= 0 && !gameData.boss.defeated) {
+                gameData.boss.defeated = true;
+                showNotification('⚔️ BOSS DEFEATED! ✨', 'victory');
+                addXP(100);
+                gameData.streak++;
+                
+                if (gameData.streak % 7 === 0) {
+                    setTimeout(() => {
+                        showNotification('🏆 7 JOURS CONSÉCUTIFS! ✨ Nouvelle compétence: CONSTANCE', 'victory');
+                    }, 1500);
+                }
+                
+                updateStreakDisplay();
+                autoSave();
+            }
+        }
+
+        function updateStreakDisplay() {
+            document.getElementById('streakCount').textContent = gameData.streak;
+            document.getElementById('daysOff').textContent = `Jours off: ${gameData.daysOffThisWeek}/${gameData.maxDaysOffPerWeek}`;
+        }
+
+        function setEnergyMode(mode) {
+            gameData.energyMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            let desc = "";
+            switch(mode) {
+                case 'fatigue': desc = "Mode fatigue : 3 tâches essentielles seulement"; break;
+                case 'normal': desc = "Mode normal : Toutes les tâches essentielles"; break;
+                case 'motivated': desc = "Mode motivé : Toutes les tâches + défi bonus!"; break;
+                case 'late': desc = "Mode retard : Commencez par une tâche simple"; break;
+            }
+            document.getElementById('modeDescription').textContent = desc;
+            generateTasks();
+            autoSave();
+        }
+
+        function failDay() {
+            if (confirm("💀 VOUS ÊTES MORT\n\nMais vous pouvez réessayer demain.\nChaque échec vous rend plus fort.\n\nReposez-vous au feu de camp.")) {
+                gameData.hp = Math.max(10, gameData.hp - 30);
+                gameData.boss.currentHp = gameData.boss.maxHp;
+                gameData.boss.defeated = false;
+                gameData.dailyTasks.forEach(t => t.completed = false);
+                gameData.streak = 0;
+                
+                showNotification('💀 YOU DIED\nMais demain est un nouveau jour!', 'death');
+                updateStats();
+                updateBossDisplay();
+                generateTasks();
+                updateStreakDisplay();
+                autoSave();
+            }
+        }
+
+        function takeDayOff() {
+            if (gameData.daysOffThisWeek >= gameData.maxDaysOffPerWeek) {
+                alert(`⛔ Maximum ${gameData.maxDaysOffPerWeek} jours off/semaine.`);
+                return;
+            }
+            
+            if (confirm("Prendre un jour OFF ?\n\nC'est OK de se reposer. Pas de culpabilité!")) {
+                gameData.daysOffThisWeek++;
+                gameData.streak = 0;
+                addXP(10);
+                showNotification('🌴 Jour OFF accepté!', 'victory');
+                updateStreakDisplay();
+                autoSave();
+            }
+        }
+
+        function completeDay() {
+            const completed = gameData.dailyTasks.filter(t => t.completed).length;
+            const essential = gameData.dailyTasks.filter(t => t.essential).length;
+            
+            if (completed >= essential) {
+                addXP(50);
+                gameData.hp = Math.min(gameData.maxHp, gameData.hp + 20);
+                gameData.streak++;
+                showNotification('✨ VICTOIRE DU JOUR!', 'victory');
+                updateStats();
+                updateStreakDisplay();
+                autoSave();
+            } else {
+                alert("Complétez toutes les tâches essentielles d'abord!");
+            }
+        }
+
+        function restAtCampfire() {
+            if (confirm("💤 Repos au feu de camp\n\nVous regagnez 50% de vos PV maximum.")) {
+                const heal = Math.floor(gameData.maxHp * 0.5);
+                gameData.hp = Math.min(gameData.maxHp, gameData.hp + heal);
+                showNotification(`🔥 Repos au feu de camp\nPV +${heal}`, 'level-up');
+                updateStats();
+                autoSave();
+            }
+        }
+
+        function getBadmintonDay() {
+            const day = new Date().getDay();
+            return (day === 1 || day === 4 || day === 6) ? "Aujourd'hui" : "Prochain: Samedi";
+        }
+
+        function showNotification(message, type) {
+            const notif = document.getElementById('notification');
+            notif.textContent = message;
+            notif.className = `notification ${type}`;
+            notif.style.display = 'block';
+            setTimeout(() => notif.style.display = 'none', 3000);
+        }
+
+        // Exposer les fonctions globales
+        window.loginWithGoogle = loginWithGoogle;
+        window.loginAsGuest = loginAsGuest;
+        window.setEnergyMode = setEnergyMode;
+        window.failDay = failDay;
+        window.takeDayOff = takeDayOff;
+        window.completeDay = completeDay;
+        window.restAtCampfire = restAtCampfire;
+        window.forceSync = forceSync;
+    </script>
+</body>
+</html>
